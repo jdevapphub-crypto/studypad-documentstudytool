@@ -1,197 +1,68 @@
-/* =====================================================
-   StudyPad — Service Worker
-   Joheliv: Jason's Labs, South Africa, 2026
-===================================================== */
+// Joheliv Labs - StudyPad Document Study Tool - sw.js
+// Version: v2 - Optimized for GitHub Pages subpath
 
-const CACHE_NAME = 'studypad-cache-v1';
-const RUNTIME_CACHE = 'studypad-runtime-v1';
+const CACHE_NAME = 'studypad-doc-tool-v2';
+const BASE_PATH = '/studypad-documentstudytool/';
 
-/* =====================================================
-   ASSETS TO PRECACHE
-   Adjust paths if your folder structure differs.
-===================================================== */
-const PRECACHE_ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  // External CDN libraries (cached on first load)
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
-  'https://cdn.jsdelivr.net/npm/idb@7/build/umd.js'
+const FILES_TO_CACHE = [
+  `${BASE_PATH}`,
+  `${BASE_PATH}index.html`,
+  `${BASE_PATH}manifest.json`,
+  `${BASE_PATH}icon-512.png`,
+  `${BASE_PATH}icon-192.png`,
+  // Add your css/js if you have them
+  // `${BASE_PATH}styles.css`,
+  // `${BASE_PATH}app.js`
 ];
 
-/* =====================================================
-   INSTALL EVENT
-   Pre-cache the app shell.
-===================================================== */
-self.addEventListener('install', (event) => {
-  console.log('[StudyPad SW] Installing...');
-
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-          console.warn('[StudyPad SW] Some assets failed to precache:', err);
-        });
-      })
-      .then(() => self.skipWaiting())
-  );
-});
-
-/* =====================================================
-   ACTIVATE EVENT
-   Clean up old caches.
-===================================================== */
-self.addEventListener('activate', (event) => {
-  console.log('[StudyPad SW] Activating...');
-
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME && name !== RUNTIME_CACHE)
-          .map((name) => {
-            console.log('[StudyPad SW] Deleting old cache:', name);
-            return caches.delete(name);
-          })
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-/* =====================================================
-   FETCH EVENT
-   Strategy:
-     - API calls (Worker) → network first, no cache
-     - Navigation → network first, fallback to cache
-     - Static assets → cache first, fallback to network
-===================================================== */
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  /* -------- Skip non-GET requests -------- */
-  if (request.method !== 'GET') return;
-
-  /* -------- Skip chrome-extension and other schemes -------- */
-  if (!url.protocol.startsWith('http')) return;
-
-  /* -------- API calls: Network only (never cache AI responses) -------- */
-  if (url.hostname.includes('workers.dev') || 
-      url.href.includes('aidetector.jdevapphub')) {
-    event.respondWith(
-      fetch(request).catch(() => {
-        return new Response(
-          JSON.stringify({ 
-            error: 'offline', 
-            message: 'You are offline. Please check your internet connection.' 
-          }),
-          {
-            status: 503,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      })
-    );
-    return;
-  }
-
-  /* -------- Navigation requests: network first -------- */
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, copy);
-          });
-          return response;
-        })
-        .catch(() => {
-          return caches.match(request)
-            .then((cached) => cached || caches.match('./index.html'));
-        })
-    );
-    return;
-  }
-
-  /* -------- Static assets: cache first -------- */
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-
-      return fetch(request)
-        .then((response) => {
-          // Only cache successful, basic/cors responses
-          if (!response || response.status !== 200 || response.type === 'error') {
-            return response;
-          }
-
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, copy).catch(() => {});
-          });
-
-          return response;
-        })
-        .catch(() => {
-          // Fallback for failed asset requests
-          if (request.destination === 'document') {
-            return caches.match('./index.html');
-          }
-          return new Response('', { status: 408 });
-        });
+// Install - Cache app shell
+self.addEventListener('install', (e) => {
+  console.log('[StudyPad] Installing SW');
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(FILES_TO_CACHE);
     })
   );
+  self.skipWaiting();
 });
 
-/* =====================================================
-   MESSAGE EVENT
-   Allows the page to trigger skipWaiting.
-===================================================== */
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
-
-/* =====================================================
-   BACKGROUND SYNC (placeholder for future use)
-===================================================== */
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'studypad-sync') {
-    console.log('[StudyPad SW] Background sync triggered');
-    // Future: sync offline study kits to a server
-  }
-});
-
-/* =====================================================
-   PUSH NOTIFICATIONS (placeholder for future use)
-===================================================== */
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  const data = event.data.json();
-  const options = {
-    body: data.body || 'New update from StudyPad',
-    icon: './icon-192.png',
-    badge: './icon-192.png',
-    vibrate: [100, 50, 100],
-    data: { url: data.url || '/' }
-  };
-
-  event.waitUntil(
-    self.registration.showNotification(
-      data.title || 'StudyPad',
-      options
-    )
+// Activate - Clean old caches
+self.addEventListener('activate', (e) => {
+  console.log('[StudyPad] Activating SW');
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      );
+    })
   );
+  self.clients.claim();
 });
 
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil(
-    clients.openWindow(event.notification.data.url || '/')
+// Fetch - Cache First, then Network (best for your study tool)
+self.addEventListener('fetch', (e) => {
+  // Skip non-GET and chrome extensions
+  if (e.request.method !== 'GET' || !e.request.url.startsWith('http')) return;
+
+  e.respondWith(
+    caches.match(e.request).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(e.request).then((response) => {
+        // Cache new files dynamically (pdfs, docs)
+        if (response.status === 200 && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(e.request, clone);
+          });
+        }
+        return response;
+      }).catch(() => {
+        // Offline fallback
+        if (e.request.headers.get('accept').includes('text/html')) {
+          return caches.match(`${BASE_PATH}index.html`);
+        }
+      });
+    })
   );
 });
