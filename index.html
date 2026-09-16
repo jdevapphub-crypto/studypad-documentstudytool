@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="StudyPad - Turn your documents into quizzes and flashcards.">
+  <title>StudyPad — Document Study Tool</title>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <!-- Mammoth.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- idb for IndexedDB (lightweight) -->
+  <script src="https://cdn.jsdelivr.net/npm/idb@7/build/umd.js"></script>
+  <style>
+    /* ====== CSS – kept mostly identical, with minor additions ====== */
+    :root{
+      --bg:#f5f7fb;
+      --surface:#ffffff;
+      --surface-2:#f8fafc;
+      --border:#e5e7eb;
+      --text:#111827;
+      --muted:#64748b;
+      --primary:#2563eb;
+      --primary-dark:#1d4ed8;
+      --success:#16a34a;
+      --danger:#dc2626;
+      --warning:#d97706;
+      --shadow:0 10px 35px rgba(15,23,42,.07);
+      --radius:18px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html{scroll-behavior:smooth;}
+    body{
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,
+      "Segoe UI",Roboto,Arial,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      min-height:100vh;
+    }
+    button,input,select{font:inherit;}
+    button{cursor:pointer;}
+    .hidden{display:none!important;}
+    .app{min-height:100vh;display:flex;}
+    .sidebar{
+      width:250px;background:#0f172a;color:#fff;position:fixed;left:0;top:0;bottom:0;
+      z-index:100;display:flex;flex-direction:column;padding:22px 16px;
+    }
+    .brand{display:flex;align-items:center;gap:11px;padding:5px 10px 28px;}
+    .brand-logo{
+      width:38px;height:38px;border-radius:11px;background:#2563eb;
+      display:grid;place-items:center;
+    }
+    .brand-logo svg{width:21px;height:21px;}
+    .brand-name{font-size:18px;font-weight:750;letter-spacing:-.3px;}
+    .brand-sub{font-size:10px;color:#94a3b8;margin-top:2px;}
+    .nav{display:flex;flex-direction:column;gap:5px;}
+    .nav-btn{
+      border:0;background:transparent;color:#94a3b8;width:100%;display:flex;
+      align-items:center;gap:12px;padding:12px 13px;border-radius:11px;
+      text-align:left;transition:.2s;
+    }
+    .nav-btn svg{width:19px;height:19px;flex:none;}
+    .nav-btn:hover{background:#1e293b;color:#fff;}
+    .nav-btn.active{background:#1d4ed8;color:#fff;}
+    .sidebar-bottom{margin-top:auto;}
+    .storage{
+      background:#172033;border:1px solid #263249;border-radius:14px;padding:14px;
+      margin-bottom:12px;
+    }
+    .storage-title{font-size:12px;color:#cbd5e1;margin-bottom:9px;}
+    .storage-bar{height:5px;background:#334155;border-radius:20px;overflow:hidden;}
+    .storage-fill{width:35%;height:100%;background:#3b82f6;}
+    .storage-text{font-size:10px;color:#64748b;margin-top:7px;}
+    .main{margin-left:250px;width:calc(100% - 250px);min-height:100vh;}
+    .topbar{
+      height:72px;background:rgba(255,255,255,.92);backdrop-filter:blur(14px);
+      border-bottom:1px solid var(--border);display:flex;align-items:center;
+      justify-content:space-between;padding:0 34px;position:sticky;top:0;z-index:50;
+    }
+    .page-title{font-size:20px;font-weight:720;letter-spacing:-.4px;}
+    .page-subtitle{font-size:12px;color:var(--muted);margin-top:2px;}
+    .top-actions{display:flex;align-items:center;gap:10px;}
+    .icon-btn{
+      width:40px;height:40px;border:1px solid var(--border);background:#fff;
+      border-radius:11px;display:grid;place-items:center;color:#475569;
+    }
+    .icon-btn:hover{background:#f8fafc;}
+    .icon-btn svg{width:19px;height:19px;}
+    .content{max-width:1250px;margin:auto;padding:32px;}
+    .section{display:none;}
+    .section.active{display:block;}
+    .hero{
+      background:linear-gradient(135deg,#0f172a,#172554);border-radius:24px;
+      padding:38px;color:#fff;position:relative;overflow:hidden;margin-bottom:25px;
+    }
+    .hero:after{
+      content:"";position:absolute;width:300px;height:300px;border-radius:50%;
+      right:-90px;top:-100px;border:50px solid rgba(59,130,246,.12);
+    }
+    .hero-content{position:relative;z-index:2;max-width:650px;}
+    .hero h1{font-size:34px;line-height:1.15;letter-spacing:-1px;margin-bottom:12px;}
+    .hero p{color:#cbd5e1;line-height:1.6;font-size:14px;margin-bottom:25px;}
+    .hero-buttons{display:flex;gap:10px;flex-wrap:wrap;}
+    .btn{
+      border:0;border-radius:11px;padding:11px 17px;display:inline-flex;
+      align-items:center;justify-content:center;gap:8px;font-weight:650;
+      font-size:13px;transition:.2s;
+    }
+    .btn svg{width:17px;height:17px;}
+    .btn-primary{background:var(--primary);color:#fff;}
+    .btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px);}
+    .btn-light{background:#fff;color:#0f172a;}
+    .btn-light:hover{background:#f1f5f9;}
+    .btn-secondary{background:#f1f5f9;color:#334155;border:1px solid var(--border);}
+    .btn-secondary:hover{background:#e2e8f0;}
+    .btn-danger{background:#fee2e2;color:#b91c1c;}
+    .btn-success{background:#dcfce7;color:#15803d;}
+    .stats{
+      display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:25px;
+    }
+    .stat-card{
+      background:#fff;border:1px solid var(--border);border-radius:16px;
+      padding:19px;box-shadow:var(--shadow);
+    }
+    .stat-icon{
+      width:38px;height:38px;border-radius:10px;background:#eff6ff;color:#2563eb;
+      display:grid;place-items:center;margin-bottom:14px;
+    }
+    .stat-icon svg{width:19px;height:19px;}
+    .stat-value{font-size:25px;font-weight:750;}
+    .stat-label{color:var(--muted);font-size:12px;margin-top:3px;}
+    .upload-card{
+      background:#fff;border:1px solid var(--border);border-radius:20px;
+      padding:25px;box-shadow:var(--shadow);
+    }
+    .card-heading{
+      display:flex;align-items:center;justify-content:space-between;
+      gap:15px;margin-bottom:20px;
+    }
+    .card-heading h2{font-size:17px;}
+    .card-heading p{font-size:12px;color:var(--muted);margin-top:4px;}
+    .dropzone{
+      border:2px dashed #cbd5e1;border-radius:17px;min-height:235px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      text-align:center;padding:25px;transition:.2s;
+    }
+    .dropzone.dragover{border-color:var(--primary);background:#eff6ff;}
+    .upload-icon{
+      width:56px;height:56px;border-radius:16px;background:#eff6ff;color:#2563eb;
+      display:grid;place-items:center;margin-bottom:15px;
+    }
+    .upload-icon svg{width:27px;height:27px;}
+    .dropzone h3{font-size:16px;margin-bottom:7px;}
+    .dropzone p{font-size:12px;color:var(--muted);margin-bottom:16px;}
+    .file-info{
+      margin-top:16px;display:none;align-items:center;justify-content:space-between;
+      background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:13px;
+    }
+    .file-info.show{display:flex;}
+    .file-name{font-weight:650;font-size:13px;}
+    .file-size{font-size:11px;color:var(--muted);}
+    .recent-section{margin-top:28px;}
+    .section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+    .section-title h2{font-size:17px;}
+    .study-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+    .study-card{
+      background:#fff;border:1px solid var(--border);border-radius:16px;
+      padding:17px;display:flex;gap:13px;align-items:flex-start;
+    }
+    .study-icon{
+      width:42px;height:42px;background:#eff6ff;color:#2563eb;border-radius:11px;
+      display:grid;place-items:center;flex:none;
+    }
+    .study-icon svg{width:20px;height:20px;}
+    .study-info{min-width:0;flex:1;}
+    .study-info h3{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .study-info p{color:var(--muted);font-size:11px;margin-top:4px;}
+    .study-meta{display:flex;gap:7px;margin-top:9px;}
+    .badge{font-size:10px;padding:4px 7px;background:#f1f5f9;color:#475569;border-radius:6px;}
+    .generator-layout{display:grid;grid-template-columns:1fr 320px;gap:20px;}
+    .generator-main,.generator-settings{
+      background:#fff;border:1px solid var(--border);border-radius:18px;padding:23px;
+    }
+    .generator-settings h3{font-size:15px;margin-bottom:17px;}
+    .setting{margin-bottom:19px;}
+    .setting label{display:block;font-size:12px;font-weight:650;margin-bottom:7px;}
+    .select,.number-input{
+      width:100%;height:42px;border:1px solid var(--border);border-radius:9px;
+      background:#fff;padding:0 11px;color:#334155;outline:none;
+    }
+    .select:focus,.number-input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #dbeafe;}
+    .mode-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .mode-btn{
+      padding:10px;border:1px solid var(--border);background:#fff;border-radius:9px;
+      color:#64748b;font-size:11px;
+    }
+    .mode-btn.active{border-color:#93c5fd;background:#eff6ff;color:#1d4ed8;font-weight:650;}
+    .generate-area{
+      min-height:390px;border:1px solid var(--border);border-radius:15px;
+      background:#f8fafc;display:flex;align-items:center;justify-content:center;
+      text-align:center;padding:30px;
+    }
+    .generate-empty h3{font-size:17px;margin:14px 0 7px;}
+    .generate-empty p{color:var(--muted);font-size:12px;max-width:400px;line-height:1.6;}
+    .large-icon{
+      width:62px;height:62px;background:#eff6ff;color:#2563eb;border-radius:17px;
+      display:grid;place-items:center;margin:auto;
+    }
+    .large-icon svg{width:29px;height:29px;}
+    .loading{display:none;text-align:center;}
+    .loading.show{display:block;}
+    .loader{
+      width:40px;height:40px;border:4px solid #dbeafe;border-top-color:#2563eb;
+      border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 17px;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading h3{font-size:16px;margin-bottom:6px;}
+    .loading p{color:var(--muted);font-size:12px;}
+    .results-header{
+      background:#fff;border:1px solid var(--border);border-radius:18px;
+      padding:21px;margin-bottom:18px;
+    }
+    .results-header h2{font-size:19px;}
+    .results-header p{color:var(--muted);font-size:12px;margin-top:5px;}
+    .result-tabs{display:flex;gap:7px;margin-top:17px;overflow-x:auto;}
+    .result-tab{
+      border:1px solid var(--border);background:#fff;padding:9px 13px;
+      border-radius:8px;font-size:12px;white-space:nowrap;
+    }
+    .result-tab.active{background:#0f172a;color:#fff;border-color:#0f172a;}
+    .result-grid{display:grid;gap:14px;}
+    .question-card{
+      background:#fff;border:1px solid var(--border);border-radius:16px;padding:20px;
+    }
+    .question-number{font-size:11px;color:#2563eb;font-weight:700;margin-bottom:9px;}
+    .question-text{font-size:15px;font-weight:650;line-height:1.5;margin-bottom:15px;}
+    .options{display:grid;gap:8px;}
+    .option{
+      border:1px solid var(--border);border-radius:10px;padding:12px;
+      background:#fff;text-align:left;font-size:12px;color:#334155;
+    }
+    .option:hover{border-color:#93c5fd;background:#f8fbff;}
+    .option.correct{border-color:#86efac;background:#f0fdf4;color:#166534;}
+    .option.incorrect{border-color:#fca5a5;background:#fef2f2;color:#991b1b;}
+    .explanation{
+      margin-top:14px;padding:12px;background:#f8fafc;border-radius:9px;
+      color:#475569;font-size:11px;line-height:1.6;
+    }
+    .source{margin-top:10px;font-size:10px;color:#64748b;}
+    .flashcard-area{max-width:760px;margin:20px auto;}
+    .flashcard{min-height:390px;perspective:1200px;cursor:pointer;}
+    .flashcard-inner{
+      position:relative;width:100%;min-height:390px;transform-style:preserve-3d;
+      transition:transform .55s;
+    }
+    .flashcard.flipped .flashcard-inner{transform:rotateY(180deg);}
+    .card-face{
+      position:absolute;inset:0;backface-visibility:hidden;background:#fff;
+      border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);
+      display:flex;flex-direction:column;justify-content:center;align-items:center;
+      padding:45px;text-align:center;
+    }
+    .card-face.back{transform:rotateY(180deg);background:#0f172a;color:#fff;}
+    .card-label{
+      font-size:10px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;
+      color:#2563eb;margin-bottom:20px;
+    }
+    .back .card-label{color:#93c5fd;}
+    .card-question{font-size:25px;line-height:1.35;font-weight:720;}
+    .card-answer{font-size:17px;line-height:1.65;color:#cbd5e1;}
+    .flash-controls{display:flex;justify-content:center;gap:10px;margin-top:17px;}
+    .flash-progress{text-align:center;color:var(--muted);font-size:11px;margin-top:13px;}
+    .topic-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+    .topic-card{background:#fff;border:1px solid var(--border);border-radius:15px;padding:18px;}
+    .topic-card h3{font-size:14px;margin-bottom:6px;}
+    .topic-card p{font-size:11px;color:var(--muted);line-height:1.5;}
+    .search{position:relative;margin-bottom:17px;}
+    .search input{
+      width:100%;height:43px;border:1px solid var(--border);border-radius:10px;
+      padding:0 14px 0 40px;outline:none;background:#fff;
+    }
+    .search svg{
+      position:absolute;left:13px;top:12px;width:18px;height:18px;color:#64748b;
+    }
+    .toast{
+      position:fixed;right:25px;bottom:25px;background:#0f172a;color:#fff;
+      padding:13px 17px;border-radius:11px;box-shadow:0 15px 35px rgba(0,0,0,.2);
+      font-size:12px;transform:translateY(100px);opacity:0;transition:.3s;z-index:999;
+    }
+    .toast.show{transform:translateY(0);opacity:1;}
+    .mobile-menu{display:none;}
+    .document-selector{
+      margin-bottom:16px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .document-selector select{
+      flex:1;
+      height:42px;
+      border:1px solid var(--border);
+      border-radius:9px;
+      padding:0 11px;
+      background:#fff;
+      color:#334155;
+      outline:none;
+    }
+    .document-selector .btn{
+      white-space:nowrap;
+    }
+    @media(max-width:1000px){
+      .sidebar{transform:translateX(-100%);transition:.25s;}
+      .sidebar.open{transform:translateX(0);}
+      .main{margin-left:0;width:100%;}
+      .mobile-menu{display:grid;}
+      .stats{grid-template-columns:repeat(2,1fr);}
+      .generator-layout{grid-template-columns:1fr;}
+      .topic-grid{grid-template-columns:repeat(2,1fr);}
+    }
+    @media(max-width:650px){
+      .topbar{padding:0 17px;height:64px;}
+      .content{padding:18px;}
+      .hero{padding:25px;border-radius:19px;}
+      .hero h1{font-size:26px;}
+      .stats{grid-template-columns:1fr 1fr;gap:9px;}
+      .stat-card{padding:14px;}
+      .stat-value{font-size:21px;}
+      .study-list{grid-template-columns:1fr;}
+      .topic-grid{grid-template-columns:1fr;}
+      .flashcard,.flashcard-inner{min-height:330px;}
+      .card-face{padding:27px;}
+      .card-question{font-size:20px;}
+      .card-answer{font-size:14px;}
+    }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22V5.5Z"/>
+          <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">StudyPad</div>
+        <div class="brand-sub">DOCUMENT STUDY TOOL</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-section="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Dashboard
+      </button>
+      <button class="nav-btn" data-section="generator">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+          <path d="M14 2v6h6"/>
+          <path d="M8 13h8M8 17h6"/>
+        </svg>
+        Generate Study Kit
+      </button>
+      <button class="nav-btn" data-section="quiz">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        Quizzes
+      </button>
+      <button class="nav-btn" data-section="flashcards">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="4" width="14" height="14" rx="2"/>
+          <path d="M8 8h10a2 2 0 0 1 2 2v10"/>
+        </svg>
+        Flashcards
+      </button>
+      <button class="nav-btn" data-section="topics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="8"/>
+          <path d="M12 8v4l3 2"/>
+        </svg>
+        Topics
+      </button>
+      <button class="nav-btn" data-section="about">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 16v-4M12 8h.01"/>
+        </svg>
+        About
+      </button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="storage">
+        <div class="storage-title">Study Library</div>
+        <div class="storage-bar"><div class="storage-fill" id="storageFill"></div></div>
+        <div class="storage-text" id="storageText">0 documents saved</div>
+      </div>
+      <button class="nav-btn" id="exploreBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        Explore
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="icon-btn mobile-menu" id="menuBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <div>
+          <div class="page-title" id="pageTitle">Dashboard</div>
+          <div class="page-subtitle">Build smarter study material from your documents</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" title="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-4-4"/>
+          </svg>
+        </button>
+        <button class="icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/>
+            <path d="M10 21h4"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <section class="section active" id="dashboard">
+        <div class="hero">
+          <div class="hero-content">
+            <h1>Turn your documents into smarter study material.</h1>
+            <p>
+              Upload your academic material and StudyPad will analyse the
+              content to create quizzes, flashcards and topic summaries
+              based on the information in your document.
+            </p>
+            <div class="hero-buttons">
+              <button class="btn btn-primary" onclick="openGenerator()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                Create Study Kit
+              </button>
+              <button class="btn btn-light" onclick="document.getElementById('fileInput').click()">
+                Upload Document
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22V5.5Z"/>
+              </svg>
+            </div>
+            <div class="stat-value" id="statDocs">0</div>
+            <div class="stat-label">Documents saved</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+            <div class="stat-value" id="statQuestions">0</div>
+            <div class="stat-label">Questions generated</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="14" height="14" rx="2"/>
+                <path d="M8 8h10a2 2 0 0 1 2 2v10"/>
+              </svg>
+            </div>
+            <div class="stat-value" id="statCards">0</div>
+            <div class="stat-label">Flashcards created</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="8"/>
+                <path d="M12 8v4l3 2"/>
+              </svg>
+            </div>
+            <div class="stat-value" id="statTopics">0</div>
+            <div class="stat-label">Topics identified</div>
+          </div>
+        </div>
+
+        <div class="upload-card">
+          <div class="card-heading">
+            <div>
+              <h2>Upload study material</h2>
+              <p>Supported formats: PDF, DOCX, PPTX and TXT</p>
+            </div>
+          </div>
+          <div class="dropzone" id="dropzone">
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 16V4"/>
+                <path d="m7 9 5-5 5 5"/>
+                <path d="M5 20h14"/>
+              </svg>
+            </div>
+            <h3>Drop your document here</h3>
+            <p>
+              Upload lecture notes, study guides, assignments,
+              textbooks or other academic documents.
+            </p>
+            <button class="btn btn-primary" id="chooseFile">
+              Choose Document
+            </button>
+            <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.ppt,.pptx,.txt" hidden>
+          </div>
+          <div class="file-info" id="fileInfo">
+            <div>
+              <div class="file-name" id="fileName"></div>
+              <div class="file-size" id="fileSize"></div>
+            </div>
+            <button class="btn btn-primary" onclick="openGenerator()">
+              Continue
+            </button>
+          </div>
+        </div>
+
+        <div class="recent-section">
+          <div class="section-title">
+            <h2>Recent Study Sets</h2>
+          </div>
+          <div class="study-list" id="recentList">
+            <!-- filled by JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- GENERATOR -->
+      <section class="section" id="generator">
+        <div class="results-header">
+          <h2>Create Study Kit</h2>
+          <p>Configure what StudyPad should generate from your document.</p>
+        </div>
+        <div class="document-selector">
+          <select id="savedDocumentSelect">
+            <option value="">-- Select a saved document --</option>
+          </select>
+          <button class="btn btn-secondary" id="useSelectedDocBtn">Use this document</button>
+        </div>
+        <div class="generator-layout">
+          <div class="generator-main">
+            <div class="generate-area">
+              <div class="generate-empty" id="generatorEmpty">
+                <div class="large-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+                    <path d="M14 2v6h6"/>
+                    <path d="M8 13h8M8 17h5"/>
+                  </svg>
+                </div>
+                <h3 id="generatorFileTitle">No document selected</h3>
+                <p>
+                  Upload a document or select a saved one above,
+                  then configure your study material.
+                </p>
+              </div>
+              <div class="loading" id="loading">
+                <div class="loader"></div>
+                <h3>Analysing your document</h3>
+                <p id="loadingText">Extracting important concepts...</p>
+              </div>
+            </div>
+            <div style="margin-top:16px;text-align:right">
+              <button class="btn btn-primary" id="generateBtn" onclick="generateStudyKit()">
+                Generate Study Kit
+              </button>
+            </div>
+          </div>
+          <aside class="generator-settings">
+            <h3>Generation Settings</h3>
+            <div class="setting">
+              <label>Quiz questions</label>
+              <select class="select" id="questionCount">
+                <option value="5">5 Questions</option>
+                <option value="10" selected>10 Questions</option>
+                <option value="20">20 Questions</option>
+                <option value="30">30 Questions</option>
+              </select>
+            </div>
+            <div class="setting">
+              <label>Difficulty</label>
+              <select class="select" id="difficulty">
+                <option value="mixed">Mixed</option>
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+            <div class="setting">
+              <label>Flashcards</label>
+              <select class="select" id="flashcardCount">
+                <option value="10">10 Cards</option>
+                <option value="20" selected>20 Cards</option>
+                <option value="30">30 Cards</option>
+                <option value="40">40 Cards</option>
+              </select>
+            </div>
+            <div class="setting">
+              <label>Quiz style</label>
+              <div class="mode-buttons">
+                <button class="mode-btn active" data-mode="mixed">Mixed</button>
+                <button class="mode-btn" data-mode="mcq">Multiple Choice</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- QUIZ -->
+      <section class="section" id="quiz">
+        <div class="results-header">
+          <h2 id="quizTitle">Quiz</h2>
+          <p id="quizSubtitle">Test your understanding of the uploaded material.</p>
+          <div class="result-tabs">
+            <button class="result-tab active" id="allQuestionsBtn">All Questions</button>
+            <button class="result-tab" id="retryQuizBtn">Retry Quiz</button>
+          </div>
+        </div>
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-4-4"/>
+          </svg>
+          <input type="text" id="questionSearch" placeholder="Search questions...">
+        </div>
+        <div class="result-grid" id="quizContainer">
+          <div class="generate-area">
+            <div class="generate-empty">
+              <div class="large-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 11l3 3L22 4"/>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+              </div>
+              <h3>Your quiz will appear here</h3>
+              <p>Upload a document and generate a study kit to create questions.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FLASHCARDS -->
+      <section class="section" id="flashcards">
+        <div class="results-header">
+          <h2>Flashcards</h2>
+          <p>Review important concepts from your study material.</p>
+        </div>
+        <div id="flashcardEmpty" class="generate-area">
+          <div class="generate-empty">
+            <div class="large-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="4" width="14" height="14" rx="2"/>
+                <path d="M8 8h10a2 2 0 0 1 2 2v10"/>
+              </svg>
+            </div>
+            <h3>No flashcards yet</h3>
+            <p>Generate a study kit to create your flashcards.</p>
+          </div>
+        </div>
+        <div class="flashcard-area hidden" id="flashcardArea">
+          <div class="flashcard" id="flashcard">
+            <div class="flashcard-inner">
+              <div class="card-face front">
+                <div class="card-label">Question</div>
+                <div class="card-question" id="cardQuestion"></div>
+              </div>
+              <div class="card-face back">
+                <div class="card-label">Answer</div>
+                <div class="card-answer" id="cardAnswer"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flash-controls">
+            <button class="btn btn-secondary" id="prevCard">Previous</button>
+            <button class="btn btn-primary" id="flipCard">Flip Card</button>
+            <button class="btn btn-secondary" id="nextCard">Next</button>
+          </div>
+          <div class="flash-progress" id="flashProgress">1 / 1</div>
+        </div>
+      </section>
+
+      <!-- TOPICS -->
+      <section class="section" id="topics">
+        <div class="results-header">
+          <h2>Detected Topics</h2>
+          <p>Key subjects identified from your uploaded material.</p>
+        </div>
+        <div class="topic-grid" id="topicContainer">
+          <div class="generate-area" style="grid-column:1/-1">
+            <div class="generate-empty">
+              <div class="large-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="8"/>
+                  <path d="M12 8v4l3 2"/>
+                </svg>
+              </div>
+              <h3>No topics available</h3>
+              <p>Generate a study kit from a document first.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABOUT -->
+      <section class="section" id="about">
+        <div class="results-header">
+          <h2>About StudyPad</h2>
+          <p>Document Study Tool</p>
+        </div>
+        <div style="background:#fff;border:1px solid var(--border);border-radius:18px;padding:32px;box-shadow:var(--shadow);">
+          <div style="max-width:700px;margin:0 auto;">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+              <div style="width:56px;height:56px;border-radius:16px;background:#eff6ff;color:#2563eb;display:grid;place-items:center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:28px;height:28px;">
+                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22V5.5Z"/>
+                  <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/>
+                </svg>
+              </div>
+              <div>
+                <h2 style="font-size:24px;font-weight:750;">StudyPad</h2>
+                <p style="color:var(--muted);font-size:14px;">Document Study Tool</p>
+              </div>
+            </div>
+
+            <p style="color:#334155;line-height:1.8;margin-bottom:20px;font-size:14px;">
+              StudyPad is a smart study platform that transforms your documents into interactive
+              study materials. Upload PDF, DOCX, PPTX, or TXT files and instantly generate
+              quizzes, flashcards, and topic summaries based on your content.
+            </p>
+
+            <div style="background:#f8fafc;border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:24px;">
+              <h3 style="font-size:16px;margin-bottom:12px;color:#0f172a;">Joheliv: Jason's Labs</h3>
+              <p style="color:#475569;font-size:14px;line-height:1.7;">
+                <strong>Location:</strong> South Africa<br>
+                <strong>Year:</strong> 2026<br>
+                <strong>Developer:</strong> Jason's Labs
+              </p>
+            </div>
+
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="window.open('YOUR_URL', '_blank')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                Explore
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* =====================================================
+     CONFIGURATION
+  ===================================================== */
+  const API_URL = "https://aidetector.jdevapphub.workers.dev/";
+  const EXPLORE_URL = "YOUR_URL"; // <-- replace later
+
+  /* =====================================================
+     INDEXEDDB SETUP (via idb)
+  ===================================================== */
+  let dbPromise = null;
+
+  function getDB() {
+    if (!dbPromise) {
+      dbPromise = idb.openDB('studypad-db', 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains('documents')) {
+            const store = db.createObjectStore('documents', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            store.createIndex('createdAt', 'createdAt');
+          }
+          if (!db.objectStoreNames.contains('studySets')) {
+            const store = db.createObjectStore('studySets', {
+              keyPath: 'id',
+              autoIncrement: true
+            });
+            store.createIndex('createdAt', 'createdAt');
+            store.createIndex('documentId', 'documentId');
+          }
+        }
+      });
+    }
+    return dbPromise;
+  }
+
+  /* =====================================================
+     STATE
+  ===================================================== */
+  let selectedFile = null;
+  let selectedDocumentId = null;
+  let selectedDocumentText = null;
+  let studyData = { title: "", topics: [], quiz: [], flashcards: [] };
+  let currentCard = 0;
+  let quizScore = 0;
+
+  /* =====================================================
+     DOM
+  ===================================================== */
+  const fileInput = document.getElementById("fileInput");
+  const dropzone = document.getElementById("dropzone");
+  const chooseFile = document.getElementById("chooseFile");
+  const fileInfo = document.getElementById("fileInfo");
+  const fileName = document.getElementById("fileName");
+  const fileSize = document.getElementById("fileSize");
+  const savedDocumentSelect = document.getElementById("savedDocumentSelect");
+  const useSelectedDocBtn = document.getElementById("useSelectedDocBtn");
+  const recentList = document.getElementById("recentList");
+  const storageFill = document.getElementById("storageFill");
+  const storageText = document.getElementById("storageText");
+
+  /* =====================================================
+     NAVIGATION
+  ===================================================== */
+  document.querySelectorAll(".nav-btn[data-section]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const section = btn.dataset.section;
+      switchSection(section);
+      document.getElementById("sidebar").classList.remove("open");
+    });
+  });
+
+  function switchSection(section){
+    document.querySelectorAll(".section").forEach(el => el.classList.remove("active"));
+    const target = document.getElementById(section);
+    if(target) target.classList.add("active");
+    document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
+    const activeBtn = document.querySelector(`.nav-btn[data-section="${section}"]`);
+    if(activeBtn) activeBtn.classList.add("active");
+    const titles = {
+      dashboard:"Dashboard",
+      generator:"Create Study Kit",
+      quiz:"Quiz",
+      flashcards:"Flashcards",
+      topics:"Topics",
+      about:"About"
+    };
+    document.getElementById("pageTitle").textContent = titles[section] || "StudyPad";
+    window.scrollTo({ top:0, behavior:"smooth" });
+  }
+
+  function openGenerator(){ switchSection("generator"); }
+
+  /* =====================================================
+     MOBILE MENU
+  ===================================================== */
+  document.getElementById("menuBtn").addEventListener("click", () => {
+    document.getElementById("sidebar").classList.toggle("open");
+  });
+
+  /* =====================================================
+     EXPLORE BUTTON
+  ===================================================== */
+  document.getElementById("exploreBtn").addEventListener("click", () => {
+    window.open(EXPLORE_URL, '_blank');
+  });
+
+  /* =====================================================
+     FILE UPLOAD
+  ===================================================== */
+  chooseFile.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", event => {
+    const file = event.target.files[0];
+    if(file) handleFile(file);
+  });
+
+  dropzone.addEventListener("dragover", event => {
+    event.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", event => {
+    event.preventDefault();
+    dropzone.classList.remove("dragover");
+    const file = event.dataTransfer.files[0];
+    if(file) handleFile(file);
+  });
+
+  async function handleFile(file){
+    const allowed = ["pdf","doc","docx","ppt","pptx","txt"];
+    const extension = file.name.split(".").pop().toLowerCase();
+    if(!allowed.includes(extension)){
+      showToast("Unsupported file type. Please upload PDF, DOCX, PPTX or TXT.");
+      return;
+    }
+
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileSize.textContent = formatFileSize(file.size);
+    fileInfo.classList.add("show");
+    document.getElementById("generatorFileTitle").textContent = file.name;
+    showToast("Document selected. Extracting text...");
+
+    // Extract text and save to IndexedDB
+    try {
+      const text = await extractTextFromFile(file);
+      if (!text || text.trim().length < 20) {
+        showToast("Document has too little text. Try another file.");
+        return;
+      }
+      const docId = await saveDocument(file.name, text);
+      selectedDocumentId = docId;
+      selectedDocumentText = text;
+      showToast("Document saved to library");
+      await refreshSavedDocuments();
+      await refreshRecentStudySets();
+      updateStorageInfo();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Could not extract text from this file.");
+    }
+  }
+
+  function formatFileSize(bytes){
+    if(bytes < 1024) return bytes + " B";
+    if(bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  /* =====================================================
+     TEXT EXTRACTION (PDF, DOCX, PPTX, TXT)
+  ===================================================== */
+  async function extractTextFromFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'txt') {
+      return await file.text();
+    }
+
+    if (ext === 'pdf') {
+      return await extractPdfText(file);
+    }
+
+    if (ext === 'docx') {
+      return await extractDocxText(file);
+    }
+
+    if (ext === 'pptx') {
+      return await extractPptxText(file);
+    }
+
+    if (ext === 'doc' || ext === 'ppt') {
+      throw new Error("Legacy .doc and .ppt formats are not supported. Please convert to .docx or .pptx.");
+    }
+
+    throw new Error("Unsupported file format.");
+  }
+
+  async function extractPdfText(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      text += strings.join(' ') + '\n';
+    }
+    return text;
+  }
+
+  async function extractDocxText(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+    return result.value;
+  }
+
+  async function extractPptxText(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const slideFiles = Object.keys(zip.files).filter(name => 
+      name.startsWith('ppt/slides/slide') && name.endsWith('.xml')
+    );
+    let fullText = '';
+    for (const slidePath of slideFiles) {
+      const content = await zip.files[slidePath].async('string');
+      const matches = content.match(/<a:t>([^<]*)<\/a:t>/g);
+      if (matches) {
+        const slideText = matches.map(m => m.replace(/<\/?a:t>/g, '')).join(' ');
+        fullText += slideText + '\n';
+      }
+    }
+    return fullText;
+  }
+
+  /* =====================================================
+     INDEXEDDB HELPERS
+  ===================================================== */
+  async function saveDocument(name, text) {
+    const db = await getDB();
+    const id = await db.add('documents', {
+      name,
+      text,
+      createdAt: new Date().toISOString()
+    });
+    return id;
+  }
+
+  async function getAllDocuments() {
+    const db = await getDB();
+    return await db.getAllFromIndex('documents', 'createdAt');
+  }
+
+  async function getDocumentById(id) {
+    const db = await getDB();
+    return await db.get('documents', id);
+  }
+
+  async function getAllStudySets() {
+    const db = await getDB();
+    return await db.getAllFromIndex('studySets', 'createdAt');
+  }
+
+  async function saveStudySet(studyData, documentId) {
+    const db = await getDB();
+    const id = await db.add('studySets', {
+      ...studyData,
+      documentId,
+      createdAt: new Date().toISOString()
+    });
+    return id;
+  }
+
+  async function getStudySetsForDocument(documentId) {
+    const db = await getDB();
+    return await db.getAllFromIndex('studySets', 'documentId', documentId);
+  }
+
+  /* =====================================================
+     UPDATE UI: SAVED DOCUMENTS DROPDOWN
+  ===================================================== */
+  async function refreshSavedDocuments() {
+    const docs = await getAllDocuments();
+    savedDocumentSelect.innerHTML = '<option value="">-- Select a saved document --</option>';
+    docs.reverse().forEach(doc => {
+      const opt = document.createElement('option');
+      opt.value = doc.id;
+      opt.textContent = doc.name;
+      savedDocumentSelect.appendChild(opt);
+    });
+  }
+
+  useSelectedDocBtn.addEventListener("click", async () => {
+    const id = Number(savedDocumentSelect.value);
+    if (!id) {
+      showToast("Please select a document from the list.");
+      return;
+    }
+    const doc = await getDocumentById(id);
+    if (!doc) {
+      showToast("Document not found.");
+      return;
+    }
+    selectedDocumentId = doc.id;
+    selectedDocumentText = doc.text;
+    selectedFile = null; // we're using saved document
+    document.getElementById("generatorFileTitle").textContent = doc.name;
+    fileInfo.classList.remove("show");
+    showToast(`Loaded: ${doc.name}`);
+  });
+
+  /* =====================================================
+     UPDATE UI: RECENT STUDY SETS
+  ===================================================== */
+  async function refreshRecentStudySets() {
+    const sets = await getAllStudySets();
+    recentList.innerHTML = '';
+
+    if (!sets.length) {
+      recentList.innerHTML = `
+        <div class="study-card">
+          <div class="study-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+              <path d="M14 2v6h6"/>
+            </svg>
+          </div>
+          <div class="study-info">
+            <h3>No study sets yet</h3>
+            <p>Upload a document to create your first study kit.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    // show most recent first, limit to 6
+    sets.reverse().slice(0, 6).forEach(set => {
+      const card = document.createElement('div');
+      card.className = 'study-card';
+      const docName = set.title || 'Untitled';
+      const qCount = set.quiz ? set.quiz.length : 0;
+      const fCount = set.flashcards ? set.flashcards.length : 0;
+      const tCount = set.topics ? set.topics.length : 0;
+
+      card.innerHTML = `
+        <div class="study-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+            <path d="M14 2v6h6"/>
+          </svg>
+        </div>
+        <div class="study-info">
+          <h3>${escapeHTML(docName)}</h3>
+          <p>${qCount} questions · ${fCount} cards · ${tCount} topics</p>
+          <div class="study-meta">
+            <span class="badge">${new Date(set.createdAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="padding:6px 12px;font-size:11px;" data-set-id="${set.id}">Load</button>
+      `;
+
+      card.querySelector('button').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const setId = Number(e.target.dataset.setId);
+        const db = await getDB();
+        const studySet = await db.get('studySets', setId);
+        if (studySet) {
+          studyData = {
+            title: studySet.title || 'Untitled',
+            topics: studySet.topics || [],
+            quiz: studySet.quiz || [],
+            flashcards: studySet.flashcards || []
+          };
+          renderStudyData();
+          document.getElementById("statQuestions").textContent = studyData.quiz.length;
+          document.getElementById("statCards").textContent = studyData.flashcards.length;
+          document.getElementById("statTopics").textContent = studyData.topics.length;
+          showToast('Study set loaded');
+          switchSection('quiz');
+        }
+      });
+
+      recentList.appendChild(card);
+    });
+  }
+
+  /* =====================================================
+     UPDATE STORAGE INFO
+  ===================================================== */
+  async function updateStorageInfo() {
+    const docs = await getAllDocuments();
+    const count = docs.length;
+    storageText.textContent = `${count} document${count !== 1 ? 's' : ''} saved`;
+    document.getElementById("statDocs").textContent = count;
+    // crude "storage" bar
+    const fillPercent = Math.min(count * 10, 100);
+    storageFill.style.width = fillPercent + '%';
+  }
+
+  /* =====================================================
+     GENERATION MODE
+  ===================================================== */
+  document.querySelectorAll(".mode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".mode-btn").forEach(x => x.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+
+  /* =====================================================
+     GENERATE STUDY KIT
+  ===================================================== */
+  async function generateStudyKit(){
+    if(!selectedFile && !selectedDocumentId){
+      showToast("Please upload or select a document first.");
+      switchSection("dashboard");
+      return;
+    }
+
+    const generatorEmpty = document.getElementById("generatorEmpty");
+    const loading = document.getElementById("loading");
+    const generateBtn = document.getElementById("generateBtn");
+
+    generatorEmpty.style.display = "none";
+    loading.classList.add("show");
+    generateBtn.disabled = true;
+
+    const loadingText = document.getElementById("loadingText");
+
+    try {
+      let text;
+      let docName = "Untitled";
+
+      if (selectedDocumentId) {
+        loadingText.textContent = "Loading saved document...";
+        const doc = await getDocumentById(selectedDocumentId);
+        if (!doc) throw new Error("Saved document not found.");
+        text = doc.text;
+        docName = doc.name;
+      } else if (selectedFile) {
+        loadingText.textContent = "Extracting text from document...";
+        text = await extractTextFromFile(selectedFile);
+        docName = selectedFile.name;
+      }
+
+      if (!text || text.trim().length < 20) {
+        throw new Error("The document does not contain enough readable text.");
+      }
+
+      loadingText.textContent = "Identifying important concepts...";
+
+      const questionCount = Number(document.getElementById("questionCount").value);
+      const flashcardCount = Number(document.getElementById("flashcardCount").value);
+      const difficulty = document.getElementById("difficulty").value;
+      const modeBtn = document.querySelector('.mode-btn.active');
+      const quizStyle = modeBtn ? modeBtn.dataset.mode : 'mixed';
+
+      loadingText.textContent = "Generating questions and flashcards...";
+
+      const response = await fetch(API_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          action: "study_kit",
+          text: text,
+          documentTitle: docName,
+          questionCount: questionCount,
+          flashcardCount: flashcardCount,
+          difficulty: difficulty,
+          quizStyle: quizStyle
+        })
+      });
+
+      const data = await response.json();
+
+      if(!response.ok){
+        throw new Error(data.message || data.error || "The AI service returned an error.");
+      }
+
+      studyData = normalizeStudyData(data, docName);
+      renderStudyData();
+
+      // Save study set to IndexedDB
+      const docIdForSet = selectedDocumentId || null;
+      await saveStudySet(studyData, docIdForSet);
+
+      // If we have a document id, make sure it's set
+      if (!selectedDocumentId && selectedFile) {
+        // try to find or create the document
+        const docs = await getAllDocuments();
+        const existing = docs.find(d => d.name === docName);
+        if (existing) {
+          selectedDocumentId = existing.id;
+        } else {
+          const newId = await saveDocument(docName, text);
+          selectedDocumentId = newId;
+        }
+      }
+
+      await refreshRecentStudySets();
+      await refreshSavedDocuments();
+      await updateStorageInfo();
+
+      document.getElementById("statQuestions").textContent = studyData.quiz.length;
+      document.getElementById("statCards").textContent = studyData.flashcards.length;
+      document.getElementById("statTopics").textContent = studyData.topics.length;
+
+      showToast("Study kit generated successfully");
+      switchSection("quiz");
+
+    } catch(error) {
+      console.error(error);
+      showToast(error.message || "Unable to generate study material.");
+      generatorEmpty.style.display = "block";
+    } finally {
+      loading.classList.remove("show");
+      generateBtn.disabled = false;
+    }
+  }
+
+  /* =====================================================
+     NORMALIZE AI DATA
+  ===================================================== */
+  function normalizeStudyData(data,title){
+    return {
+      title: data.documentTitle || data.title || title,
+      topics: Array.isArray(data.topics) ? data.topics : [],
+      quiz: Array.isArray(data.quiz) ? data.quiz : (Array.isArray(data.questions) ? data.questions : []),
+      flashcards: Array.isArray(data.flashcards) ? data.flashcards : []
+    };
+  }
+
+  /* =====================================================
+     RENDER EVERYTHING
+  ===================================================== */
+  function renderStudyData(){
+    renderQuiz();
+    renderFlashcards();
+    renderTopics();
+    document.getElementById("quizTitle").textContent = studyData.title;
+    document.getElementById("quizSubtitle").textContent =
+      `${studyData.quiz.length} questions generated from your document.`;
+  }
+
+  /* =====================================================
+     QUIZ
+  ===================================================== */
+  function renderQuiz(filter=""){
+    const container = document.getElementById("quizContainer");
+    container.innerHTML = "";
+
+    const questions = studyData.quiz.filter(q => {
+      if(!filter) return true;
+      return String(q.question || "").toLowerCase().includes(filter.toLowerCase());
+    });
+
+    if(!questions.length){
+      container.innerHTML = `
+        <div class="generate-area">
+          <div class="generate-empty">
+            <div class="large-icon">${iconSearch()}</div>
+            <h3>No questions found</h3>
+            <p>Try a different search term.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    questions.forEach((question,index) => {
+      const card = document.createElement("div");
+      card.className = "question-card";
+      const options = Array.isArray(question.options) ? question.options : [];
+
+      card.innerHTML = `
+        <div class="question-number">QUESTION ${index + 1}</div>
+        <div class="question-text">${escapeHTML(question.question || "")}</div>
+        <div class="options">
+          ${options.map((option,i) => `
+            <button class="option" data-index="${i}">
+              ${escapeHTML(String(option))}
+            </button>
+          `).join("")}
+        </div>
+        ${question.explanation ? `
+          <div class="explanation hidden">
+            <strong>Explanation</strong><br>
+            ${escapeHTML(question.explanation)}
+          </div>
+        ` : ""}
+        ${question.source ? `
+          <div class="source">Source: ${escapeHTML(question.source)}</div>
+        ` : ""}
+      `;
+
+      const optionButtons = card.querySelectorAll(".option");
+      optionButtons.forEach(button => {
+        button.addEventListener("click", () => {
+          optionButtons.forEach(x => x.disabled = true);
+          const selected = Number(button.dataset.index);
+          const correct = Number(question.correctAnswer ?? question.answerIndex ?? 0);
+          if(selected === correct){
+            button.classList.add("correct");
+            quizScore++;
+          } else {
+            button.classList.add("incorrect");
+            if(optionButtons[correct]) optionButtons[correct].classList.add("correct");
+          }
+          const explanation = card.querySelector(".explanation");
+          if(explanation) explanation.classList.remove("hidden");
+        });
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  document.getElementById("questionSearch").addEventListener("input",event => {
+    renderQuiz(event.target.value);
+  });
+
+  document.getElementById("retryQuizBtn").addEventListener("click",() => {
+    quizScore = 0;
+    renderQuiz();
+    showToast("Quiz reset");
+  });
+
+  /* =====================================================
+     FLASHCARDS
+  ===================================================== */
+  function renderFlashcards(){
+    const empty = document.getElementById("flashcardEmpty");
+    const area = document.getElementById("flashcardArea");
+
+    if(!studyData.flashcards.length){
+      empty.classList.remove("hidden");
+      area.classList.add("hidden");
+      return;
+    }
+
+    empty.classList.add("hidden");
+    area.classList.remove("hidden");
+    currentCard = 0;
+    updateFlashcard();
+  }
+
+  function updateFlashcard(){
+    if(!studyData.flashcards.length) return;
+    const card = studyData.flashcards[currentCard];
+    document.getElementById("cardQuestion").textContent = card.question || card.front || "";
+    document.getElementById("cardAnswer").textContent = card.answer || card.back || "";
+    document.getElementById("flashProgress").textContent =
+      `${currentCard + 1} / ${studyData.flashcards.length}`;
+    document.getElementById("flashcard").classList.remove("flipped");
+  }
+
+  document.getElementById("flashcard").addEventListener("click",() => {
+    document.getElementById("flashcard").classList.toggle("flipped");
+  });
+  document.getElementById("flipCard").addEventListener("click",() => {
+    document.getElementById("flashcard").classList.toggle("flipped");
+  });
+  document.getElementById("prevCard").addEventListener("click",() => {
+    if(!studyData.flashcards.length) return;
+    currentCard--;
+    if(currentCard < 0) currentCard = studyData.flashcards.length - 1;
+    updateFlashcard();
+  });
+  document.getElementById("nextCard").addEventListener("click",() => {
+    if(!studyData.flashcards.length) return;
+    currentCard++;
+    if(currentCard >= studyData.flashcards.length) currentCard = 0;
+    updateFlashcard();
+  });
+
+  /* =====================================================
+     TOPICS
+  ===================================================== */
+  function renderTopics(){
+    const container = document.getElementById("topicContainer");
+    container.innerHTML = "";
+    if(!studyData.topics.length){
+      container.innerHTML = `
+        <div class="generate-area" style="grid-column:1/-1">
+          <div class="generate-empty">
+            <h3>No topics detected</h3>
+          </div>
+        </div>
+      `;
+      return;
+    }
+    studyData.topics.forEach(topic => {
+      const name = typeof topic === "string" ? topic : topic.name || topic.title || "Topic";
+      const description = typeof topic === "object"
+        ? topic.description || "Important concept identified in the document."
+        : "Important concept identified in the document.";
+      const card = document.createElement("div");
+      card.className = "topic-card";
+      card.innerHTML = `
+        <h3>${escapeHTML(name)}</h3>
+        <p>${escapeHTML(description)}</p>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  /* =====================================================
+     TOAST
+  ===================================================== */
+  function showToast(message){
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(window.toastTimer);
+    window.toastTimer = setTimeout(() => {
+      toast.classList.remove("show");
+    },3500);
+  }
+
+  /* =====================================================
+     SECURITY / HTML ESCAPE
+  ===================================================== */
+  function escapeHTML(value){
+    return String(value)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+
+  /* =====================================================
+     ICON
+  ===================================================== */
+  function iconSearch(){
+    return `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="m20 20-4-4"/>
+      </svg>
+    `;
+  }
+
+  /* =====================================================
+     INIT
+  ===================================================== */
+  (async function init() {
+    await refreshSavedDocuments();
+    await refreshRecentStudySets();
+    await updateStorageInfo();
+  })();
+
+</script>
+</body>
+</html>
