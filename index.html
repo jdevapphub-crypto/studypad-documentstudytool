@@ -1257,19 +1257,21 @@
 
       loadingText.textContent = "Generating questions and flashcards...";
 
-      const response = await fetch(API_URL, {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          action: "study_kit",
-          text: text,
-          documentTitle: docName,
-          questionCount: questionCount,
-          flashcardCount: flashcardCount,
-          difficulty: difficulty,
-          quizStyle: quizStyle
-        })
-      });
+const GROQ_WORKER_URL = "https://royal-morning-a089flashcardsai.jdevapphub.workers.dev/api/generate";
+
+const response = await fetch(GROQ_WORKER_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    type: "both",
+    title: docName,
+    documentText: text,
+    questionCount: questionCount,
+    flashcardCount: flashcardCount,
+    difficulty: difficulty,
+    quizStyle: quizStyle
+  })
+});
 
       const data = await response.json();
 
