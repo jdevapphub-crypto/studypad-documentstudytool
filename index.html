@@ -1549,6 +1549,31 @@
     await refreshRecentStudySets();
     await updateStorageInfo();
   })();
+  /* =====================================================
+   SERVICE WORKER REGISTRATION
+===================================================== */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('./sw.js')
+      .then((reg) => {
+        console.log('[StudyPad] Service Worker registered:', reg.scope);
+
+        // Check for updates
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showToast('New version available. Refresh to update.');
+            }
+          });
+        });
+      })
+      .catch((err) => {
+        console.warn('[StudyPad] Service Worker registration failed:', err);
+      });
+  });
+}
 
 </script>
 </body>
